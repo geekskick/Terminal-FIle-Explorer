@@ -11,24 +11,33 @@
 #include <unistd.h>
 #include <time.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
-#define TOP_DIR             "/Users"   //Macs start at the top level directory /Users/
+//maximum values
 #define MAX_FILE_NAME       100        //longest file name
 #define MAX_FILES           200        //maximum amount of files in a directory
+#define MAX_IN              5          //maximum input string length
 
-#define DIR_REALLOC_ERROR   -1
-#define STR_ERR             -1
-#define STR_SUCCESS         0
+//for hidden files
 #define HIDE_ITEM           0
 #define SHOW_ITEM           1
-#define EXIT                0
-#define UP                  -1
 
-#define TEMP_FILENAME       "/Users/patrickmintram/Documents/Work/XCODE/USBAccessor/Last_Place.txt"
+//controls
+#define EXIT                0
+#define UP                  -2
+#define TOP_LEVEL           -1
+
+//return values
+#define SUCCESS             0
+#define ERR                 -1
+
+//file operators
+#define TEMP_FILENAME       "/Last_Place.txt"
 #define FILE_R              "r"
 #define FILE_RW             "r+"
 #define FILE_W              "w"
 
+//for ease
 #define print_contents(directory, files)    print_contents_p(directory, files, 0)
 #define err_chk(a)  if(!a){ fprintf(stderr, "Error assigning memory [LINE %d]\n", __LINE__); goto error; }
 
@@ -52,23 +61,22 @@ int get_num_files(struct dirent **contents);
 int realloc_dir(dir_struct* directory, char* file_path, FILE *fp);
 void time_stamp_fp(FILE* fp);
 
-
 //#################### Functions ####################
 
 //.............converts the d_type of the file into a string for displaying.............
 char* get_DT_type(int DT_TYPE){
-
+    
     switch (DT_TYPE) {
         case DT_REG:
             return "FILE";
             
         case DT_DIR:
-
+            
             return "DIR";
             
         default:
             return "OTHER";
-        
+            
     }
     
 }
@@ -93,7 +101,7 @@ void go_up(char*filename, char* output){
 char* get_extension(char *filename){
     
     /*
-     start at the end of the string and work baxkwards, until a . is encountered, signifying 
+     start at the end of the string and work baxkwards, until a . is encountered, signifying
      the start of the file extn. Take the add of this and concatenate it with the the out put
      
      make sure to put a small gap to give a nice buffer
@@ -119,18 +127,18 @@ void print_contents_p(const dir_struct* directory, struct dirent **current, uint
     }
     
     /*
-        Each time the function is called it's looking at the thing in the array, at an offset of +line number, so pass it the address of the next element of the array.
+     Each time the function is called it's looking at the thing in the array, at an offset of +line number, so pass it the address of the next element of the array.
      
      printf formatting ensures the lines all end up nice on the screen with a guaranteed length of 20 characters at all times
      */
     if (*current){
-       /*
-        display the type of item, DIR, FILE or OTHER, and if it's a file it's extension. 
-        In order to keep the columns neat restrict the filename/itemname to 40 characters in width
-        */
+        /*
+         display the type of item, DIR, FILE or OTHER, and if it's a file it's extension.
+         In order to keep the columns neat restrict the filename/itemname to 40 characters in width
+         */
         
         printf("%3.d > %40.40s\t\t%s\t%s\n", file_number++, (*current)->d_name, get_DT_type((int)(*current)->d_type), (*current)->d_type == DT_REG ? get_extension((*current)->d_name): " ");
-    
+        
         //recursion, passing the next item along in the array
         print_contents_p(directory, current + 1, file_number);
     }
@@ -154,12 +162,11 @@ void put_contents_in_array(dir_struct *directory, struct dirent **dir_arr){
      */
     
     while((temp = readdir(directory->dir_s))){
-            if(test_item(temp) == SHOW_ITEM){
-                dir_arr[i++] = temp;
-            }
+        if(test_item(temp) == SHOW_ITEM){
+            dir_arr[i++] = temp;
+        }
     }
 }
-
 
 // ..........populates dir_struct.............
 dir_struct* open_dir(char* file_path){
@@ -194,11 +201,15 @@ int realloc_dir(dir_struct* directory, char* file_path, FILE *fp){
     fprintf(fp, "%s\n", directory->dir_n);
     
     return 0;
-
+    
 error:
-    return DIR_REALLOC_ERROR;
+    return ERR;
 }
 
+/* 
+ checks if item is hidden or not
+ hidden files are '.filename', so test the first character and return whether it needs to be hidden or shown
+ */
 int test_item(struct dirent* item){
     if (item->d_name[0] == '.') {
         return HIDE_ITEM;
@@ -208,16 +219,16 @@ int test_item(struct dirent* item){
 
 //...........gets user input and validates it ..........
 int get_input(int max_num){
-#define MAX_IN  5 //maximum input string length
+
     char in_c[MAX_IN] = { 0 };
     int  in_i = 0;
     
     /*
-     input must be read in as a string to account for multi digit numvers, and -1 input. 
+     input must be read in as a string to account for multi digit numvers, and -1 input.
      
      strtol then converts this to an ineger and finally it is checked to see if it's in range before passing back the valid result
      */
-    printf("\nWhich directory do you want to explore 1 - %d: \n<%d to quit, %d to go up> ", max_num, EXIT, UP);
+    printf("\nWhich directory do you want to explore 1 - %d: \n<%d quit><%d top level><%d go up>\n", max_num, EXIT, TOP_LEVEL, UP);
     scanf("%s", in_c);
     
     in_i = (int)strtol(in_c, NULL, 10);
@@ -229,7 +240,6 @@ int get_input(int max_num){
     }
     
     return in_i;
-    
 }
 
 //........ counts the number of files in the directory ..........
@@ -243,7 +253,7 @@ int get_num_files(struct dirent **contents){
 //.......... put a time samp on the file ............
 void time_stamp_fp(FILE* fp){
     
-    time_t timer = NULL;
+    time_t timer;
     struct tm* GMT = NULL;
     
     //convert the epoch time into GMT
@@ -255,42 +265,63 @@ void time_stamp_fp(FILE* fp){
 }
 
 // #################### MAIN ####################
-
 int main(int argc, const char * argv[]) {
     
-    printf("Welcome to the file manager\n---------------------------\n");
+    printf("Welcome to the File Explorer\n---------------------------\n");
+    
+    //filepath strings
+    char    *current_path   = NULL,
+            *root_dir       = getenv("HOME"),                       //automatically gets the environment ;home' property 'users/myname'
+            *temp_file_path = calloc(MAX_FILE_NAME, sizeof(char));
+    
+    err_chk(temp_file_path);
+    
+    //get the exe's folder
+    current_path = getcwd(NULL, MAX_FILE_NAME);
+    
+    //create the filepath string
+    strcpy(temp_file_path, current_path);
+    strcat(temp_file_path, TEMP_FILENAME);
     
     dir_struct *current_dir = NULL;
-    int i = -(int)strlen(TOP_DIR);
+    int input = (int)strlen(root_dir) - 2; //randomly chose two
     
-    FILE *fp = fopen(TEMP_FILENAME, FILE_RW);
+    /*
+     open file to read the last place out of, 
+     however if it's not there, create it in w mode
+     
+     if it is there, close then make a new one in w mode
+     */
     
-    //file not in exisitance so create it and start file explorer from top level
+    //open in read mode
+    FILE *fp = fopen(temp_file_path, FILE_R);
+    
+    //if file doesnt exist create and open for writing
     if (!fp) {
-        fp = fopen(TEMP_FILENAME, FILE_W);
-        current_dir = open_dir(TOP_DIR);
+        fp = fopen(temp_file_path, FILE_W);
+        current_dir = open_dir(root_dir);
     }
-    
-    //file opened successfully,
     else{
-        
         char from_file[MAX_FILE_NAME] = { 0 };
-         /*
-          iterate bacwards through the file until the /user phrase is found. 
-          This is done by moveing the file stream backwards, reading from the file stream onwards, then companing the first 5 or so characters to the /user phrase. 
-          
-          iterative process means that i seek fursther from the end each time, inly stopping when a result is found, or the current poisition of the cursor is at the start for the file
-          */
+        /*
+         iterate bacwards through the file until the /user phrase is found.
+         This is done by moving the file stream backwards, reading from the file stream onwards, then comparing the first 5 or so characters to the /user phrase.
+         
+         iterative process means that i seek fursther from the end each time, inly stopping when a result is found, or the current poisition of the cursor is at the start for the file
+         */
         do {
-            fseek(fp, i--, SEEK_END);
+            fseek(fp, -(input++), SEEK_END);
             fscanf(fp, "%s", from_file);
-        } while (strncmp(TOP_DIR, from_file, strlen(TOP_DIR)) != 0 && SEEK_CUR != SEEK_SET);
+        } while (strncmp(root_dir, from_file, strlen(root_dir)) != 0 && input < MAX_FILE_NAME);
         
-        //open saved directory
-        current_dir = open_dir(from_file);
+        //open saved directory, or the root director if no info in the file
+        current_dir = open_dir(strlen(from_file) == 0 ? root_dir : from_file);
+        
+        //open in write mode
+        fclose(fp);
+        fp = fopen(temp_file_path, FILE_W);
+        err_chk(fp);
     }
-
-    //initialise the starting directory to the top level mac folder '/Users/'
     
     struct dirent **dir_contents = calloc(MAX_FILES, sizeof(struct dirent*));
     err_chk(dir_contents);
@@ -298,14 +329,11 @@ int main(int argc, const char * argv[]) {
     put_contents_in_array(current_dir, dir_contents);
     print_contents(current_dir, dir_contents);
     
-    int input = 0;
-    
-    //present workin directory
+    //present working directory
     char *pwd = calloc(MAX_FILE_NAME, sizeof(char));
     err_chk(pwd);
     strcpy(pwd, current_dir->dir_n);
     
-
     //main loop
     while ((input = get_input(get_num_files(dir_contents))) != 0) {
         switch (input) {
@@ -317,32 +345,44 @@ int main(int argc, const char * argv[]) {
                 go_up(current_dir->dir_n, pwd);
                 break;
                 
+            case TOP_LEVEL:
+                memset(pwd, 0, MAX_FILE_NAME);
+                strcpy(pwd, root_dir);
+                break;
+                
             default:
                 
                 /*
                  the current directory filepath doesn't end in a /, so this must be
                  put on BEFORE the next part of the filename
+                 
+                 get_input() validates the input, so no need for checking again
                  */
                 strcat(pwd, "/");
                 strcat(pwd, dir_contents[input -1]->d_name);
                 break;
         }
         
-        
         /*
          realloc_dir safely closes and reopens the new directory, saving it's filepath at the same time
          */
-        if(realloc_dir(current_dir, pwd, fp) == DIR_REALLOC_ERROR) goto error;
+        if(realloc_dir(current_dir, pwd, fp) == ERR) goto error;
         put_contents_in_array(current_dir, dir_contents);
         print_contents(current_dir, dir_contents);
     }
-    
-    //cleaning up
+
+    /*
+     although controversial labels are mentioned as ok in k&r as long as it's infrequent and carefully managed. 
+     In this case any error will send it to here, then clean up HEAP usage
+     */
 error:
     printf("Exitting\n");
-    fclose(fp);
-    closedir(current_dir->dir_s);
+    if(fp)              fclose(fp);
+    if(current_dir->dir_s)
+        closedir(current_dir->dir_s);
+    if (temp_file_path) free(temp_file_path);
     if (current_dir)    free(current_dir);
+    if (current_path)   free(current_path);
     if (dir_contents)   free(dir_contents);
     if (pwd)            free(pwd);
     return 0;
