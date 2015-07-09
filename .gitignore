@@ -18,3 +18,5 @@
 *.xccheckout
 
 USBAccessor/test
+
+USBAccessor/fileexplorer
