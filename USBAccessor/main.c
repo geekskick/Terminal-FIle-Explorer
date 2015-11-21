@@ -178,8 +178,9 @@ dir_struct* open_dir(char* file_path){
     
     current_dir->dir_s = opendir(current_dir->dir_n);
     assert(current_dir->dir_s);
-    
+
     return current_dir;
+
 }
 
 // ............ safety closes the directory and opens a new one, appending this to the file at the same time .....
@@ -250,7 +251,7 @@ int get_num_files(struct dirent **contents){
     return i;
 }
 
-//.......... put a time samp on the file ............
+//.......... put a time stamp on the file ............
 void time_stamp_fp(FILE* fp){
     
     time_t timer;
@@ -370,6 +371,7 @@ int main(int argc, const char * argv[]) {
         put_contents_in_array(current_dir, dir_contents);
         print_contents(current_dir, dir_contents);
     }
+    
 
     /*
      although controversial labels are mentioned as ok in k&r as long as it's infrequent and carefully managed. 
@@ -385,5 +387,6 @@ error:
     if (current_path)   free(current_path);
     if (dir_contents)   free(dir_contents);
     if (pwd)            free(pwd);
+    
     return 0;
 }
